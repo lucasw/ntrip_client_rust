@@ -18,12 +18,14 @@ async fn main() -> Result<(), NtripClientError> {
     let args: Vec<String> = env::args().collect();
 
     let output_file = get_output_file(&args);
+    println!("output file: {output_file:?}");
 
     let server = NtripConfig::new(&args[1], &args[2], &args[3], &args[4], &args[5]);
 
     // Create connection
-    println!("Connecting to {server:?}");
-    let connection = server.connect().await.unwrap();
+    println!("Connecting to server with config: {server:?}");
+    let connection = server.connect().await?;
+    println!("connected: {connection:?}");
 
     ntrip_client::ntrip_client::read_stream(connection, output_file).await?;
 

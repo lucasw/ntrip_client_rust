@@ -75,18 +75,26 @@ pub mod ntrip_client {
 
         pub async fn connect(&self) -> Result<NtripConnection, NtripClientError> {
             let full_url = self.get_formated_address();
-
+            println!("full url: {full_url}");
             let stream = TcpStream::connect(full_url).await?;
 
             Ok(NtripConnection::new(self.clone(), stream))
         }
     }
 
-    fn fromat_get_request(mountpoint: &str) -> String {
-        format!(
-            "GET /{} HTTP/1.0\r\nUser-Agent: ntrip_client_rust\r\n\r\n",
-            mountpoint
-        )
+    fn fromat_get_request(mountpoint: &str, credentials: Option<&str>) -> String {
+        let req = format!("GET /{} HTTP/1.0\r\nUser-Agent: ntrip_client_rust\r\n",
+            mountpoint,
+        );
+
+        let req = match credentials {
+            Some(credentials) => {
+                format!("{req}Authorization: Basic {}\r\n\r\n", credentials)
+            }
+            None => {req}
+        };
+
+        req + "\r\n"
     }
 
     fn print_hex(buf: &[u8], width: usize) {
@@ -108,13 +116,13 @@ pub mod ntrip_client {
             let mut stream = BufReader::new(&mut self.stream);
 
             // Send request
-            let request = fromat_get_request("");
+            let request = fromat_get_request("", None);
             stream.write_all(request.as_bytes()).await?;
 
             // Receive response
             let mut response = String::new();
             while let Ok(_) =
-                timeout(Duration::from_millis(500), stream.read_line(&mut response)).await
+                timeout(Duration::from_millis(1500), stream.read_line(&mut response)).await
             {
                 // Check end of the HTTP Response
                 if response.contains("\r\n\r\n") {
@@ -122,6 +130,7 @@ pub mod ntrip_client {
                 }
             }
 
+            println!("caster table response: {response}");
             Ok(response)
         }
     }
@@ -133,13 +142,14 @@ pub mod ntrip_client {
         let mut stream = BufReader::new(connection.stream);
 
         // Send request
-        let request = fromat_get_request(&connection.config.mountpoint);
+        let request = fromat_get_request(&connection.config.mountpoint, Some(&connection.config.credentials));
+        println!("request: {request}");
         stream.write_all(request.as_bytes()).await?;
 
         let mut response = String::new();
         stream.read_line(&mut response).await?;
         stream.read_line(&mut response).await?;
-        println!("{response}");
+        println!("response: '{response}'");
 
         // Initialize the RTCM parser
         let mut parser = RtcmParser::new();
