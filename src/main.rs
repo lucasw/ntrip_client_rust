@@ -22,12 +22,15 @@ async fn main() -> Result<(), NtripClientError> {
 
     let server = NtripConfig::new(&args[1], &args[2], &args[3], &args[4], &args[5]);
 
+    let nmea = args[7].clone() + "\r\n";
+    println!("nmea: '{nmea}'");
+
     // Create connection
     println!("Connecting to server with config: {server:?}");
     let connection = server.connect().await?;
     println!("connected: {connection:?}");
 
-    ntrip_client::ntrip_client::read_stream(connection, output_file).await?;
+    ntrip_client::ntrip_client::read_stream(connection, &nmea, output_file).await?;
 
     Ok(())
 }

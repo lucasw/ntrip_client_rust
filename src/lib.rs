@@ -137,6 +137,7 @@ pub mod ntrip_client {
 
     pub async fn read_stream(
         connection: NtripConnection,
+        nmea: &str,
         output: Option<File>,
     ) -> Result<(), NtripClientError> {
         let mut stream = BufReader::new(connection.stream);
@@ -151,29 +152,53 @@ pub mod ntrip_client {
         stream.read_line(&mut response).await?;
         println!("response: '{response}'");
 
+        {
+            println!("sending nmea");
+            let rv = stream.write_all(nmea.as_bytes()).await?;
+            println!("{rv:?}");
+        }
+
         // Initialize the RTCM parser
         let mut parser = RtcmParser::new();
 
-        // Read stream and print to screen
+        println!("wait for rtcm messages");
         let mut buffer = [0; 256];
         while let Ok(Ok(n)) = timeout(Duration::from_secs(5), stream.read(&mut buffer)).await {
             if let Some(mut file) = output.as_ref() {
                 file.write_all(&buffer[0..n])?;
             }
 
+            if n == 0 {
+                continue;
+            }
+            // println!("{:?}", &buffer[0..n]);
+            // println!("{n} bytes received");
             let messages = parser.parse(&buffer[..n]);
+            if messages.len() == 0 {
+                continue;
+            }
+            // println!("{:?}", messages);
+            // println!("{} messages queued", messages.len());
 
             // Debug
-            for msg in messages {
+            for (ind, msg) in messages.into_iter().enumerate() {
                 let rtcm = Rtcm::parse(&msg[3..msg.len() - 3])?;
                 match rtcm {
                     Rtcm::Rtcm1005(msg) => {
-                        println!("{msg:?}");
+                        println!("{ind} {msg:?}");
+                    }
+                    Rtcm::Rtcm1006(msg) => {
+                        println!("{ind} {msg:?}");
+                    }
+                    Rtcm::Rtcm1019(msg) => {
+                        println!("{ind} {msg:?}");
                     }
                     Rtcm::RtcmMSM7(msg) => {
-                        println!("{msg}");
+                        println!("{ind} {msg:?}");
                     }
-                    _ => {}
+                    _ => {
+                        println!("{ind} unknown: {rtcm:?}");
+                    }
                 }
             }
         }
