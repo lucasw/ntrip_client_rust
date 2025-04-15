@@ -1,5 +1,6 @@
 use ntrip_client::ntrip_client::{NtripClientError, NtripConfig};
 use std::{env, fs::File};
+use tokio::io::AsyncWriteExt;
 
 fn get_output_file(args: &Vec<String>) -> Option<File> {
     if args.len() == 7 {
@@ -30,7 +31,11 @@ async fn main() -> Result<(), NtripClientError> {
     let connection = server.connect().await?;
     println!("connected: {connection:?}");
 
-    ntrip_client::ntrip_client::read_stream(connection, &nmea, output_file).await?;
+    let mut stream = ntrip_client::ntrip_client::init_stream(connection).await?;
+
+    stream.write_all(nmea.as_bytes()).await?;
+
+    ntrip_client::ntrip_client::read_stream(&mut stream, output_file).await?;
 
     Ok(())
 }

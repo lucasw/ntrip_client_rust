@@ -135,11 +135,10 @@ pub mod ntrip_client {
         }
     }
 
-    pub async fn read_stream(
+    // TODO(lucasw) make part of init of NtripClient
+    pub async fn init_stream(
         connection: NtripConnection,
-        nmea: &str,
-        output: Option<File>,
-    ) -> Result<(), NtripClientError> {
+    ) -> Result<BufReader<TcpStream>, NtripClientError> {
         let mut stream = BufReader::new(connection.stream);
 
         // Send request
@@ -150,14 +149,16 @@ pub mod ntrip_client {
         let mut response = String::new();
         stream.read_line(&mut response).await?;
         stream.read_line(&mut response).await?;
+        // TODO(lucasw) parse response
         println!("response: '{response}'");
+        Ok(stream)
+    }
 
-        {
-            println!("sending nmea");
-            let rv = stream.write_all(nmea.as_bytes()).await?;
-            println!("{rv:?}");
-        }
-
+    // TODO(lucasw) make an NtripClient with reading in an impl
+    pub async fn read_stream(
+        stream: &mut BufReader<TcpStream>,
+        output: Option<File>,
+    ) -> Result<(), NtripClientError> {
         // Initialize the RTCM parser
         let mut parser = RtcmParser::new();
 
@@ -182,6 +183,7 @@ pub mod ntrip_client {
 
             // Debug
             for (ind, msg) in messages.into_iter().enumerate() {
+                println!("{ind} {:?}", msg);
                 let rtcm = Rtcm::parse(&msg[3..msg.len() - 3])?;
                 match rtcm {
                     Rtcm::Rtcm1005(msg) => {
